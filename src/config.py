@@ -59,9 +59,7 @@ class Config:
         else ["*"]
     )
     
-    # 工具调用配置
-    ENABLE_TOOLIFY: bool = os.getenv("ENABLE_TOOLIFY", "true").lower() == "true"
-    TOOLIFY_CUSTOM_PROMPT: str = os.getenv("TOOLIFY_CUSTOM_PROMPT", "")
+
     
     @classmethod
     def validate(cls) -> None:

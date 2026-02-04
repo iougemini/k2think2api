@@ -7,7 +7,7 @@
 - 🧠 **MBZUAI K2-Think 模型**: 支持 MBZUAI 开发的 K2-Think 推理模型
 - 🔄 **OpenAI 兼容**: 完全兼容 OpenAI API 格式，无缝对接现有应用
 - ⚡ **流式响应**: 支持实时流式聊天响应，支持控制thinking输出
-- 🛠️ **工具调用**: 支持 OpenAI Function Calling，可集成外部工具和API
+
 - 📊 **文件上传**: 支持文件、图像上传
 
 ## 智能Token管理系统
@@ -241,12 +241,7 @@ curl http://localhost:8001/health
 | `HOST` | `0.0.0.0` | 服务监听地址 |
 | `PORT` | `8001`    | 服务端口     |
 
-### 工具调用配置
 
-| 变量名                    | 默认值   | 说明                             |
-| ------------------------- | -------- | -------------------------------- |
-| `ENABLE_TOOLIFY`        | `true` | 是否启用工具调用功能             |
-| `TOOLIFY_CUSTOM_PROMPT` | `""`   | 自定义工具调用提示词模板（可选） |
 
 详细配置说明请参考 `.env.example` 文件。
 
@@ -392,79 +387,7 @@ curl http://localhost:8001/admin/tokens/updater/status
 - ✅ **状态透明**: 可实时查看更新进度和状态
 - ✅ **错误处理**: 更新失败时记录详细错误信息
 
-## 工具调用功能
 
-K2Think API 代理支持 OpenAI Function Calling 规范的工具调用功能。
-
-### 功能特性
-
-- ✅ 支持 OpenAI 标准的 `tools` 和 `tool_choice` 参数
-- ✅ 自动工具提示注入和消息处理
-- ✅ 流式和非流式响应中的工具调用检测
-- ✅ 智能 JSON 解析和工具调用提取
-- ✅ 支持多种工具调用格式（JSON 代码块、内联 JSON、自然语言）
-
-### 使用示例
-
-```python
-import openai
-
-client = openai.OpenAI(
-    base_url="http://localhost:8001/v1",
-    api_key="sk-k2think"
-)
-
-# 定义工具
-tools = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_weather",
-            "description": "获取指定城市的天气信息",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "city": {
-                        "type": "string",
-                        "description": "城市名称，例如：北京、上海"
-                    },
-                    "unit": {
-                        "type": "string",
-                        "enum": ["celsius", "fahrenheit"],
-                        "description": "温度单位"
-                    }
-                },
-                "required": ["city"]
-            }
-        }
-    }
-]
-
-# 发送工具调用请求
-response = client.chat.completions.create(
-    model="MBZUAI-IFM/K2-Think",
-    messages=[
-        {"role": "user", "content": "北京今天天气怎么样？"}
-    ],
-    tools=tools,
-    tool_choice="auto"  # auto, none, required 或指定特定工具
-)
-
-# 处理响应
-if response.choices[0].message.tool_calls:
-    for tool_call in response.choices[0].message.tool_calls:
-        function_name = tool_call.function.name
-        function_args = tool_call.function.arguments
-        print(f"调用工具: {function_name}")
-        print(f"参数: {function_args}")
-```
-
-### tool_choice 参数说明
-
-- `"auto"`: 让模型自动决定是否使用工具（推荐）
-- `"none"`: 禁用工具调用
-- `"required"`: 强制模型使用工具
-- `{"type": "function", "function": {"name": "tool_name"}}`: 强制使用特定工具
 
 ## Python SDK 使用示例
 
@@ -537,12 +460,7 @@ GET_TOKENS_SCRIPT=get_tokens.py
 # 代理配置（可选）
 PROXY_URL=http://username:password@proxy.example.com:8080
 
-# 功能开关
-ENABLE_TOOLIFY=true
-DEBUG_LOGGING=false
 
-# 工具调用配置（可选）
-# TOOLIFY_CUSTOM_PROMPT="自定义提示词模板"
 ```
 
 ### accounts.txt 文件示例

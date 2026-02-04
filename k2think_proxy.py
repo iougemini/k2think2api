@@ -114,8 +114,7 @@ async def homepage():
             "Token轮询和负载均衡",
             "自动失效检测和重试",
             "Token池管理",
-            "启动即刷新（内存优先）",
-            "OpenAI Function Calling 工具调用"
+            "启动即刷新（内存优先）"
         ],
         "endpoints": {
             "chat": "/v1/chat/completions",
@@ -145,7 +144,6 @@ async def health_check():
         "timestamp": int(time.time()),
         "config": {
             "debug_logging": Config.DEBUG_LOGGING,
-            "toolify_enabled": Config.ENABLE_TOOLIFY,
             "note": "思考内容输出现在通过模型名控制"
         },
         "tokens": {

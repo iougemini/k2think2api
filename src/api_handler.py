@@ -23,7 +23,6 @@ from src.models import ChatCompletionRequest, ModelsResponse, ModelInfo
 from src.response_processor import ResponseProcessor
 from src.token_manager import TokenManager
 from src.utils import safe_log_error, safe_log_info, safe_log_warning
-from src.toolify_handler import should_enable_toolify, prepare_toolify_request
 
 logger = logging.getLogger(__name__)
 
@@ -83,15 +82,6 @@ class APIHandler:
             # 处理消息
             raw_messages = self._process_raw_messages(request.messages)
             
-            # 检查是否需要启用工具调用
-            request_dict = request.model_dump()
-            enable_toolify = should_enable_toolify(request_dict)
-            
-            # 如果启用工具调用，预处理消息并注入提示词
-            if enable_toolify:
-                safe_log_info(logger, "[TOOLIFY] 工具调用功能已启用")
-                raw_messages, _ = prepare_toolify_request(request_dict, raw_messages)
-            
             self._log_request_info(raw_messages)
             
             # 构建K2Think请求
@@ -105,11 +95,11 @@ class APIHandler:
             # 处理响应（带重试机制）
             if request.stream:
                 return await self._handle_stream_response_with_retry(
-                    request, k2think_payload, output_thinking, enable_toolify
+                    request, k2think_payload, output_thinking
                 )
             else:
                 return await self._handle_non_stream_response_with_retry(
-                    request, k2think_payload, output_thinking, enable_toolify
+                    request, k2think_payload, output_thinking
                 )
                 
         except K2ThinkProxyError:
@@ -293,7 +283,6 @@ class APIHandler:
         request: ChatCompletionRequest,
         k2think_payload: Dict,
         output_thinking: bool = True,
-        enable_toolify: bool = False,
         max_retries: int = 3
     ) -> StreamingResponse:
         """处理流式响应（带重试机制）"""
@@ -331,7 +320,7 @@ class APIHandler:
                 async def stream_generator():
                     try:
                         async for chunk in self.response_processor.process_stream_response(
-                            k2think_payload, headers, output_thinking, request.model, enable_toolify
+                            k2think_payload, headers, output_thinking, request.model
                         ):
                             yield chunk
                         # 流式响应成功完成，标记token成功
@@ -397,7 +386,6 @@ class APIHandler:
         request: ChatCompletionRequest,
         k2think_payload: Dict,
         output_thinking: bool = True,
-        enable_toolify: bool = False,
         max_retries: int = 3
     ) -> JSONResponse:
         """处理非流式响应（带重试机制）"""
@@ -439,39 +427,14 @@ class APIHandler:
                 # 标记token成功
                 self.token_manager.mark_token_success(token)
                 
-                # 检查是否有工具调用
-                tool_response = None
-                if enable_toolify:
-                    from src.toolify_handler import parse_toolify_response
-                    tool_response = parse_toolify_response(answer_content, request.model)
+                # 传递推理内容(仅当output_thinking为True时)
+                final_thinking_content = thinking_content if output_thinking else None
+                final_duration = duration if output_thinking else None
                 
-                if tool_response:
-                    # 返回包含tool_calls的响应
-                    openai_response = {
-                        "id": f"chatcmpl-{int(time.time())}",
-                        "object": ResponseConstants.CHAT_COMPLETION_OBJECT,
-                        "created": int(time.time()),
-                        "model": request.model,
-                        "choices": [{
-                            "index": 0,
-                            "message": tool_response,
-                            "finish_reason": "tool_calls"
-                        }],
-                        "usage": token_info or {
-                            "prompt_tokens": 0,
-                            "completion_tokens": 0,
-                            "total_tokens": 0
-                        }
-                    }
-                else:
-                    # 传递推理内容(仅当output_thinking为True时)
-                    final_thinking_content = thinking_content if output_thinking else None
-                    final_duration = duration if output_thinking else None
-                    
-                    openai_response = self.response_processor.create_completion_response(
-                        answer_content, token_info, request.model, final_thinking_content, final_duration
-                    )
-                
+                openai_response = self.response_processor.create_completion_response(
+                    answer_content, token_info, request.model, final_thinking_content, final_duration
+                )
+            
                 return JSONResponse(content=openai_response)
                 
             except (UpstreamError, Exception) as e:
