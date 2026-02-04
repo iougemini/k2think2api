@@ -7,6 +7,7 @@ import time
 import asyncio
 import logging
 import uuid
+import re
 from datetime import datetime
 from typing import Dict, AsyncGenerator, Tuple, Optional
 import pytz
@@ -28,6 +29,53 @@ class ResponseProcessor:
     
     def __init__(self, config):
         self.config = config
+    
+    def extract_thinking_content(self, full_content: str) -> Tuple[Optional[str], str, Optional[int]]:
+        """
+        从完整内容中提取思考内容、回答内容和思考时长
+        
+        Args:
+            full_content: 完整的响应内容
+        
+        Returns:
+            (thinking_content, answer_content, duration)
+            - thinking_content: 思考内容(如果存在)
+            - answer_content: 回答内容
+            - duration: 思考时长(秒,如果存在)
+        """
+        if not full_content:
+            return None, "", None
+        
+        # 1. 尝试使用标准正则匹配 <think duration="...">...</think>
+        match = re.search(ContentConstants.THINK_TAG_PATTERN, full_content, re.DOTALL)
+        
+        if match:
+            duration_str = match.group(1)  # duration属性值(可能为None)
+            thinking_content = match.group(2).strip()  # 思考内容
+            duration = int(duration_str) if duration_str else None
+            
+            # 移除<think>标签后的剩余内容作为回答
+            answer_content = full_content[:match.start()] + full_content[match.end():]
+            answer_content = answer_content.strip()
+            
+            return thinking_content, answer_content, duration
+            
+        # 2. 容错处理: 只有 </think> 结束标签而没有开始标签的情况
+        # 观察到上游有时会返回缺失 <think> 开始标签但包含 </think> 的内容
+        elif ContentConstants.THINK_END_TAG in full_content:
+            end_index = full_content.find(ContentConstants.THINK_END_TAG)
+            
+            # 确保这不是一个带有开始标签但正则没匹配上的情况
+            start_tag_index = full_content.find("<think")
+            
+            # 如果确实没有开始标签，或者结束标签在开始标签之前(异常情况)
+            if start_tag_index == -1 or end_index < start_tag_index:
+                thinking_content = full_content[:end_index].strip()
+                answer_content = full_content[end_index + len(ContentConstants.THINK_END_TAG):].strip()
+                return thinking_content, answer_content, None
+        
+        # 3. 没有发现思考标签，整个内容即为回答
+        return None, full_content, None
     
     def extract_answer_content(self, full_content: str, output_thinking: bool = True) -> str:
         """删除第一个<answer>标签和最后一个</answer>标签，保留内容"""
@@ -259,8 +307,12 @@ class ResponseProcessor:
                 await client.aclose()
             raise e
     
-    async def process_non_stream_response(self, k2think_payload: dict, headers: dict, output_thinking: bool = None) -> Tuple[str, dict]:
-        """处理非流式响应"""
+    async def process_non_stream_response(self, k2think_payload: dict, headers: dict, output_thinking: bool = None) -> Tuple[str, dict, Optional[str], Optional[int]]:
+        """处理非流式响应
+        
+        Returns:
+            (answer_content, token_info, thinking_content, duration)
+        """
         try:
             response = await self.make_request(
                 "POST", 
@@ -273,14 +325,30 @@ class ResponseProcessor:
             # K2Think 非流式请求返回标准JSON格式
             result = response.json()
             
-            # 提取内容
-            full_content = ""
+            # 提取原始内容
+            raw_content = ""
             if result.get('choices') and len(result['choices']) > 0:
                 choice = result['choices'][0]
                 if choice.get('message') and choice['message'].get('content'):
                     raw_content = choice['message']['content']
-                    # 提取<answer>标签中的内容，去除标签
-                    full_content = self.extract_answer_content(raw_content, output_thinking)
+            
+            # 提取思考内容和回答内容
+            thinking_content, answer_content, duration = self.extract_thinking_content(raw_content)
+            
+            # answer_content已经移除了<think>标签,现在只需要处理<answer>标签
+            # 直接移除<answer>和</answer>标签,保留内容
+            final_content = answer_content
+            
+            # 处理<answer>标签(如果存在)
+            answer_start = final_content.find(ContentConstants.ANSWER_START_TAG)
+            if answer_start != -1:
+                final_content = final_content[:answer_start] + final_content[answer_start + len(ContentConstants.ANSWER_START_TAG):]
+            
+            answer_end = final_content.rfind(ContentConstants.ANSWER_END_TAG)
+            if answer_end != -1:
+                final_content = final_content[:answer_end] + final_content[answer_end + len(ContentConstants.ANSWER_END_TAG):]
+            
+            final_content = final_content.strip()
             
             # 提取token信息
             token_info = result.get('usage', {
@@ -290,7 +358,7 @@ class ResponseProcessor:
             })
             
             await response.aclose()
-            return full_content, token_info
+            return final_content, token_info, thinking_content, duration
                         
         except Exception as e:
             safe_log_error(logger, "处理非流式响应错误", e)
@@ -321,10 +389,13 @@ class ResponseProcessor:
             headers_copy = headers.copy()
             headers_copy[HeaderConstants.ACCEPT] = HeaderConstants.APPLICATION_JSON
             
-            # 获取完整响应
-            full_content, token_info = await self.process_non_stream_response(k2think_payload_copy, headers_copy, output_thinking)
+            # 获取完整响应(包括思考内容)
+            answer_content, token_info, thinking_content, duration = await self.process_non_stream_response(
+                k2think_payload_copy, headers_copy, output_thinking
+            )
             
-            if not full_content:
+            # 如果没有内容,直接结束
+            if not answer_content and not thinking_content:
                 yield ResponseConstants.STREAM_DONE_MARKER
                 return
             
@@ -336,16 +407,22 @@ class ResponseProcessor:
                     toolify_detector = StreamingFunctionCallDetector(toolify.trigger_signal)
                     safe_log_info(logger, "[TOOLIFY] 流式工具调用检测器已初始化")
             
-            # 发送内容（支持工具调用检测）
+            # 先发送思考内容(reasoning_content),再发送回答内容
+            if thinking_content and output_thinking:
+                # 流式输出思考内容到reasoning_content字段
+                async for chunk in self._stream_reasoning_content(thinking_content, original_model):
+                    yield chunk
+            
+            # 发送回答内容（支持工具调用检测）
             if toolify_detector:
                 # 使用工具调用检测器处理内容
                 async for chunk in self._stream_content_with_tool_detection(
-                    full_content, original_model, toolify_detector, k2think_payload.get("chat_id", "")
+                    answer_content, original_model, toolify_detector, k2think_payload.get("chat_id", "")
                 ):
                     yield chunk
             else:
-                # 正常流式发送
-                async for chunk in self._stream_content(full_content, original_model):
+                # 正常流式发送回答内容
+                async for chunk in self._stream_content(answer_content, original_model):
                     yield chunk
                 
                 # 发送结束chunk
@@ -389,6 +466,23 @@ class ResponseProcessor:
             # 重新抛出异常以便上层处理token失败（在发送友好消息之后）
             # 上层会捕获这个异常并调用token_manager.mark_token_failure
             raise e
+    
+    async def _stream_reasoning_content(self, reasoning_content: str, model: str = None) -> AsyncGenerator[str, None]:
+        """流式发送推理内容到reasoning_content字段"""
+        chunk_size = self.calculate_dynamic_chunk_size(len(reasoning_content))
+        
+        for i in range(0, len(reasoning_content), chunk_size):
+            chunk_content = reasoning_content[i:i + chunk_size]
+            
+            chunk = self._create_chunk_data(
+                delta={"reasoning_content": chunk_content},
+                finish_reason=None,
+                model=model
+            )
+            
+            yield f"{ResponseConstants.STREAM_DATA_PREFIX}{json.dumps(chunk)}\n\n"
+            # 添加延迟模拟真实流式效果
+            await asyncio.sleep(self.config.STREAM_DELAY)
     
     async def _stream_content(self, content: str, model: str = None) -> AsyncGenerator[str, None]:
         """流式发送内容"""
@@ -485,13 +579,42 @@ class ResponseProcessor:
         self, 
         content: Optional[str],
         token_info: Optional[dict] = None,
-        model: str = None
+        model: str = None,
+        reasoning_content: Optional[str] = None,
+        reasoning_duration: Optional[int] = None
     ) -> dict:
-        """创建完整的聊天补全响应"""
+        """创建完整的聊天补全响应
+        
+        Args:
+            content: 回答内容
+            token_info: token使用信息
+            model: 模型名称
+            reasoning_content: 思考内容(可选)
+            reasoning_duration: 思考时长秒数(可选)
+        """
         message = {
             "role": "assistant",
             "content": content,
         }
+        
+        # 如果有思考内容,添加到message中
+        if reasoning_content:
+            message["reasoning_content"] = reasoning_content
+        
+        # 处理token统计
+        usage = token_info or {
+            "prompt_tokens": NumericConstants.DEFAULT_PROMPT_TOKENS,
+            "completion_tokens": NumericConstants.DEFAULT_COMPLETION_TOKENS,
+            "total_tokens": NumericConstants.DEFAULT_TOTAL_TOKENS
+        }
+        
+        # 如果有思考时长,添加reasoning_tokens估算
+        # 按照约1字/token的比例估算(中文约3字符/token,英文约4字符/token)
+        if reasoning_content and "completion_tokens_details" not in usage:
+            reasoning_tokens = len(reasoning_content) // 2  # 粗略估算
+            usage["completion_tokens_details"] = {
+                "reasoning_tokens": reasoning_tokens
+            }
         
         return {
             "id": f"chatcmpl-{int(time.time())}",
@@ -503,9 +626,5 @@ class ResponseProcessor:
                 "message": message,
                 "finish_reason": ResponseConstants.FINISH_REASON_STOP
             }],
-            "usage": token_info or {
-                "prompt_tokens": NumericConstants.DEFAULT_PROMPT_TOKENS,
-                "completion_tokens": NumericConstants.DEFAULT_COMPLETION_TOKENS,
-                "total_tokens": NumericConstants.DEFAULT_TOTAL_TOKENS
-            }
+            "usage": usage
         }

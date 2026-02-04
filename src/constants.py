@@ -5,8 +5,13 @@
 
 # API相关常量
 class APIConstants:
+    # OpenAI API 端点返回的模型标识(保持不变,向后兼容)
     MODEL_ID = "MBZUAI-IFM/K2-Think"
     MODEL_ID_NOTHINK = "MBZUAI-IFM/K2-Think-nothink"
+    
+    # 上游服务使用的实际模型名称(升级到 v2)
+    UPSTREAM_MODEL_ID = "MBZUAI-IFM/K2-Think-v2"
+    
     MODEL_OWNER = "MBZUAI"
     MODEL_ROOT = "mbzuai-k2-think-2508"
     
@@ -43,6 +48,9 @@ class ContentConstants:
     THINK_END_TAG = "</think>"
     ANSWER_START_TAG = "<answer>"
     ANSWER_END_TAG = "</answer>"
+    
+    # 思考标签正则模式
+    THINK_TAG_PATTERN = r'<think(?:\s+duration="(\d+)")?>(.+?)</think>'
     
     # 内容类型
     TEXT_TYPE = "text"

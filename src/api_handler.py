@@ -182,12 +182,12 @@ class APIHandler:
                     "content": fallback_content
                 })
         
-        # 使用实际的模型ID
-        model_id = actual_model_id or APIConstants.MODEL_ID
+        # 向上游发送请求时使用 v2 模型
+        upstream_model = APIConstants.UPSTREAM_MODEL_ID
         
         return {
             "stream": request.stream,
-            "model": model_id,
+            "model": upstream_model,
             "messages": k2think_messages,
             "params": {},
             "tool_servers": [],
@@ -198,14 +198,14 @@ class APIHandler:
             },
             "variables": self.response_processor.get_current_datetime_info(),
             "model_item": {
-                "id": model_id,
+                "id": upstream_model,
                 "object": ResponseConstants.MODEL_OBJECT,
                 "owned_by": APIConstants.MODEL_OWNER,
                 "root": APIConstants.MODEL_ROOT,
                 "parent": None,
                 "status": "active",
                 "connection_type": "external",
-                "name": model_id
+                "name": upstream_model
             },
             "background_tasks": {
                 "title_generation": True,
@@ -274,12 +274,16 @@ class APIHandler:
         original_model: str = None
     ) -> JSONResponse:
         """处理非流式响应"""
-        full_content, token_info = await self.response_processor.process_non_stream_response(
+        answer_content, token_info, thinking_content, duration = await self.response_processor.process_non_stream_response(
             k2think_payload, headers, output_thinking
         )
         
+        # 传递推理内容(仅当output_thinking为True时)
+        final_thinking_content = thinking_content if output_thinking else None
+        final_duration = duration if output_thinking else None
+        
         openai_response = self.response_processor.create_completion_response(
-            full_content, token_info, original_model
+            answer_content, token_info, original_model, final_thinking_content, final_duration
         )
         
         return JSONResponse(content=openai_response)
@@ -428,7 +432,7 @@ class APIHandler:
                 safe_log_info(logger, f"尝试非流式请求 (第{attempt + 1}次)")
                 
                 # 处理响应
-                full_content, token_info = await self.response_processor.process_non_stream_response(
+                answer_content, token_info, thinking_content, duration = await self.response_processor.process_non_stream_response(
                     k2think_payload, headers, output_thinking
                 )
                 
@@ -439,7 +443,7 @@ class APIHandler:
                 tool_response = None
                 if enable_toolify:
                     from src.toolify_handler import parse_toolify_response
-                    tool_response = parse_toolify_response(full_content, request.model)
+                    tool_response = parse_toolify_response(answer_content, request.model)
                 
                 if tool_response:
                     # 返回包含tool_calls的响应
@@ -460,8 +464,12 @@ class APIHandler:
                         }
                     }
                 else:
+                    # 传递推理内容(仅当output_thinking为True时)
+                    final_thinking_content = thinking_content if output_thinking else None
+                    final_duration = duration if output_thinking else None
+                    
                     openai_response = self.response_processor.create_completion_response(
-                        full_content, token_info, request.model
+                        answer_content, token_info, request.model, final_thinking_content, final_duration
                     )
                 
                 return JSONResponse(content=openai_response)
