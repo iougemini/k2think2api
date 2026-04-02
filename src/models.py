@@ -45,7 +45,7 @@ class ToolChoice(BaseModel):
     function: Dict[str, str]  # {"name": "tool_name"}
 
 class ChatCompletionRequest(BaseModel):
-    model: str = "MBZUAI-IFM/K2-Think"
+    model: str = "MBZUAI-IFM/K2-Think-v2"
     messages: List[Message]
     stream: bool = False
     temperature: float = 0.7
