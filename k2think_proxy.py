@@ -348,7 +348,7 @@ if __name__ == "__main__":
     log_level = "debug" if Config.DEBUG_LOGGING else "info"
     
     logger.info(f"启动服务器: {Config.HOST}:{Config.PORT}")
-    logger.info("思考内容输出: 通过模型名控制 (MBZUAI-IFM/K2-Think vs MBZUAI-IFM/K2-Think-nothink)")
+    logger.info("思考内容输出: 通过模型名控制 (MBZUAI-IFM/K2-Think-v2 vs MBZUAI-IFM/K2-Think-v2-nothink)")
     
     uvicorn.run(
         app, 

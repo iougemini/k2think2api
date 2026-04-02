@@ -6,14 +6,14 @@
 # API相关常量
 class APIConstants:
     # OpenAI API 端点返回的模型标识(保持不变,向后兼容)
-    MODEL_ID = "MBZUAI-IFM/K2-Think"
-    MODEL_ID_NOTHINK = "MBZUAI-IFM/K2-Think-nothink"
+    MODEL_ID = "MBZUAI-IFM/K2-Think-v2"
+    MODEL_ID_NOTHINK = "MBZUAI-IFM/K2-Think-v2-nothink"
     
     # 上游服务使用的实际模型名称(升级到 v2)
     UPSTREAM_MODEL_ID = "MBZUAI-IFM/K2-Think-v2"
     
     MODEL_OWNER = "MBZUAI"
-    MODEL_ROOT = "mbzuai-k2-think-2508"
+    MODEL_ROOT = "ifm-k2-think-v2"
     
     # HTTP状态码
     HTTP_OK = 200

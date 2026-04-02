@@ -402,7 +402,7 @@ client = openai.OpenAI(
 
 # 发送聊天请求
 response = client.chat.completions.create(
-    model="MBZUAI-IFM/K2-Think",
+    model="MBZUAI-IFM/K2-Think-v2",
     messages=[
         {"role": "user", "content": "解释一下量子计算的基本原理"}
     ],
@@ -413,7 +413,7 @@ print(response.choices[0].message.content)
 
 # 流式聊天
 stream = client.chat.completions.create(
-    model="MBZUAI-IFM/K2-Think",
+    model="MBZUAI-IFM/K2-Think-v2",
     messages=[
         {"role": "user", "content": "写一首关于人工智能的诗"}
     ],
@@ -432,8 +432,8 @@ K2-Think 模型具有以下特点：
 - **推理能力**: 模型会先进行思考过程，然后给出答案
 - **响应格式**: 使用 `<think></think>` 和 `<answer></answer>` 标签结构化输出
 - **思考内容控制**:
-  - `MBZUAI-IFM/K2-Think`: 包含完整的思考过程
-  - `MBZUAI-IFM/K2-Think-nothink`: 仅输出最终答案
+  - `MBZUAI-IFM/K2-Think-v2`: 包含完整的思考过程
+  - `MBZUAI-IFM/K2-Think-v2-nothink`: 仅输出最终答案
 - **多语言支持**: 支持中文、英文等多种语言
 - **专业领域**: 在数学、科学、编程等领域表现优秀
 

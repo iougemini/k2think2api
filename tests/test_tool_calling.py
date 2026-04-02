@@ -84,7 +84,7 @@ def example_basic_tool_call():
     print("\n=== 基础工具调用示例 ===\n")
     
     response = client.chat.completions.create(
-        model="MBZUAI-IFM/K2-Think",
+        model="MBZUAI-IFM/K2-Think-v2",
         messages=[
             {"role": "user", "content": "北京今天天气怎么样？"}
         ],
@@ -132,7 +132,7 @@ def example_multi_turn_conversation():
     ]
     
     response = client.chat.completions.create(
-        model="MBZUAI-IFM/K2-Think",
+        model="MBZUAI-IFM/K2-Think-v2",
         messages=messages,
         tools=tools,
         tool_choice="auto"
@@ -170,7 +170,7 @@ def example_multi_turn_conversation():
         print("\n第二轮 - 发送工具结果给模型...")
         
         final_response = client.chat.completions.create(
-            model="MBZUAI-IFM/K2-Think",
+            model="MBZUAI-IFM/K2-Think-v2",
             messages=messages,
             tools=tools
         )
@@ -184,7 +184,7 @@ def example_forced_tool_call():
     print("\n=== 强制工具调用示例 ===\n")
     
     response = client.chat.completions.create(
-        model="MBZUAI-IFM/K2-Think",
+        model="MBZUAI-IFM/K2-Think-v2",
         messages=[
             {"role": "user", "content": "计算 123 * 456"}
         ],
@@ -209,7 +209,7 @@ def example_stream_with_tools():
     print("\n=== 流式工具调用示例 ===\n")
     
     stream = client.chat.completions.create(
-        model="MBZUAI-IFM/K2-Think",
+        model="MBZUAI-IFM/K2-Think-v2",
         messages=[
             {"role": "user", "content": "帮我搜索一下人工智能的最新发展"}
         ],
@@ -245,7 +245,7 @@ def example_disable_tools():
     print("\n=== 禁用工具调用示例 ===\n")
     
     response = client.chat.completions.create(
-        model="MBZUAI-IFM/K2-Think",
+        model="MBZUAI-IFM/K2-Think-v2",
         messages=[
             {"role": "user", "content": "北京今天天气怎么样？"}
         ],
