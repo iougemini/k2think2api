@@ -1,19 +1,16 @@
 name: Build and Push Docker Image
 
 on:
-  # 自动触发：当推送到main分支时
   push:
     branches:
       - main
       - master
-    # 忽略README等文档文件的更改
     paths-ignore:
       - 'README.md'
       - '*.md'
       - '.gitignore'
       - 'LICENSE'
   
-  # 手动触发
   workflow_dispatch:
     inputs:
       tag:
@@ -29,6 +26,11 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     
+    # 建议加上这部分权限声明，确保 GITHUB_TOKEN 有权限推送到 GHCR
+    permissions:
+      contents: read
+      packages: write
+      
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -47,7 +49,8 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.IMAGE_NAME }}
+        # 核心修改点：拼接 Registry 前缀
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         tags: |
           type=ref,event=branch
           type=ref,event=pr
